@@ -23,8 +23,8 @@ import numpy as np
 from PIL import Image
 import pickle
 
-from aes_cipher import AESCipher
-from unified_compression import UnifiedCompressor
+from api.aes_cipher import AESCipher
+from api.dct2dff_compressor_fixed import DCT2DFFCompressor
 from api.file_manager import SecureFileManager
 
 app = FastAPI(title="Image Encryption API", version="1.0.0")
@@ -47,8 +47,8 @@ OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 # Mount static files for downloads
 app.mount("/files", StaticFiles(directory=OUTPUT_DIR), name="files")
 
-# Global instances
-compressor = UnifiedCompressor()
+# Global instances - Using DCT2DFF manual implementation
+compressor = DCT2DFFCompressor()
 file_manager = SecureFileManager(UPLOAD_DIR, OUTPUT_DIR)
 
 
@@ -281,7 +281,7 @@ async def decrypt_image(
         reconstructed_img = compressor.decompress(compressed_data)
         
         # Extract original format from metadata (with fallback to PNG)
-        original_format = compressed_data.get('original_format', '.png')
+        original_format = compressed_data.get('original_format', '.jpg')
         
         # Save reconstructed image with original format
         output_filename = f"{session_id}_decrypted{original_format}"
