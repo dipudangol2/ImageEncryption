@@ -241,6 +241,7 @@ async def encrypt_image(
                 "original_size": stats["original_size"],
                 "compressed_size": stats["compressed_size"],
                 "compression_ratio": round(stats["compression_ratio"], 2),
+                "space_saved_percent": round(stats["space_saved_percent"], 1),
                 "mse": round(mse, 2),
                 "psnr": round(psnr, 2),
             },

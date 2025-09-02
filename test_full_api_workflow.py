@@ -16,7 +16,7 @@ from pathlib import Path
 sys.path.append('api')
 sys.path.append('.')
 
-from api.dct2dff_compressor_fixed import DCT2DFFCompressor
+from dct2dff_compressor_fixed import DCT2DFFCompressor
 from aes_cipher import AESCipher
 
 def test_full_workflow():

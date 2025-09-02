@@ -293,6 +293,22 @@ class ManualDCTCompressor:
             
             return np.stack(channels, axis=2)
     
+    def get_compressed_preview(self, compressed_data: Dict) -> np.ndarray:
+        """
+        Get compressed/lossy preview image for testing and quality comparison.
+        
+        This method provides the compressed version with quality loss for testing purposes,
+        while decompress() provides the actual reconstructed original image.
+        
+        Args:
+            compressed_data: Compressed data dictionary from compress() method
+            
+        Returns:
+            Compressed preview image with visible quality loss (for testing only)
+        """
+        # This is identical to decompress() but clearly labeled for testing
+        return self.decompress(compressed_data)
+    
     def _decompress_channel(self, coeffs_bytes: bytes, original_shape: Tuple[int, int], quality: int, is_luminance: bool = True) -> np.ndarray:
         """Decompress a single channel from compressed coefficients."""
         h, w = original_shape
