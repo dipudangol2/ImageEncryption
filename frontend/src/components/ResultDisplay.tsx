@@ -326,34 +326,38 @@ export const ResultDisplay: React.FC<ResultDisplayProps> = ({
                       <span className="ml-1 font-medium">{result.stats.total_processing_time}s</span>
                     </div>
                   )}
-                  {result.stats.compression_time && result.stats.compression_time > 0 && (
+                  
+                  {/* Show encryption-specific timing only for encrypt operation */}
+                  {result.operation === 'encrypt' && result.stats.compression_time && result.stats.compression_time > 0 && (
                     <div>
                       <span className="text-muted-foreground">Compression:</span>
                       <span className="ml-1 font-medium">{result.stats.compression_time}s</span>
                     </div>
                   )}
-                  {result.stats.encryption_time && result.stats.encryption_time > 0 && (
+                  {result.operation === 'encrypt' && result.stats.encryption_time && result.stats.encryption_time > 0 && (
                     <div>
                       <span className="text-muted-foreground">Encryption:</span>
                       <span className="ml-1 font-medium">{result.stats.encryption_time}s</span>
                     </div>
                   )}
-                  {result.stats.decompression_time && result.stats.decompression_time > 0 && (
+                  {result.operation === 'encrypt' && result.stats.visualization_time && result.stats.visualization_time > 0 && (
                     <div>
-                      <span className="text-muted-foreground">Decompression:</span>
-                      <span className="ml-1 font-medium">{result.stats.decompression_time}s</span>
+                      <span className="text-muted-foreground">Visualization:</span>
+                      <span className="ml-1 font-medium">{result.stats.visualization_time}s</span>
                     </div>
                   )}
-                  {result.stats.decryption_time && result.stats.decryption_time > 0 && (
+                  
+                  {/* Show decryption-specific timing only for decrypt operation */}
+                  {result.operation === 'decrypt' && result.stats.decryption_time && result.stats.decryption_time > 0 && (
                     <div>
                       <span className="text-muted-foreground">Decryption:</span>
                       <span className="ml-1 font-medium">{result.stats.decryption_time}s</span>
                     </div>
                   )}
-                  {result.stats.visualization_time && result.stats.visualization_time > 0 && (
+                  {result.operation === 'decrypt' && result.stats.decompression_time && result.stats.decompression_time > 0 && (
                     <div>
-                      <span className="text-muted-foreground">Visualization:</span>
-                      <span className="ml-1 font-medium">{result.stats.visualization_time}s</span>
+                      <span className="text-muted-foreground">Decompression:</span>
+                      <span className="ml-1 font-medium">{result.stats.decompression_time}s</span>
                     </div>
                   )}
                 </div>

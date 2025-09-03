@@ -9,7 +9,7 @@ import { Shield, Lock, Unlock, Key, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface EncryptionFormProps {
-  onSubmit: (key: string, operation: 'encrypt' | 'decrypt') => void;
+  onSubmit: (password: string, operation: 'encrypt' | 'decrypt') => void;
   isLoading: boolean;
   hasImage: boolean;
   selectedFile?: File | null;
@@ -21,9 +21,9 @@ export const EncryptionForm: React.FC<EncryptionFormProps> = ({
   hasImage,
   selectedFile,
 }) => {
-  const [key, setKey] = useState('');
+  const [password, setPassword] = useState('');
   const [operation, setOperation] = useState<'encrypt' | 'decrypt'>('encrypt');
-  const [keyError, setKeyError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
 
   // Auto-detect operation based on file type
   React.useEffect(() => {
@@ -36,26 +36,22 @@ export const EncryptionForm: React.FC<EncryptionFormProps> = ({
     }
   }, [selectedFile]);
 
-  const validateKey = (value: string) => {
-    if (value.length === 0) {
-      setKeyError('Encryption key is required');
+  const validatePassword = (value: string) => {
+    if (value.trim().length === 0) {
+      setPasswordError('Password is required');
       return false;
     }
-    if (value.length !== 16) {
-      setKeyError('Key must be exactly 16 characters long');
-      return false;
-    }
-    setKeyError('');
+    setPasswordError('');
     return true;
   };
 
-  const handleKeyChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
-    setKey(value);
-    if (value.length > 0) {
-      validateKey(value);
+    setPassword(value);
+    if (value.trim().length > 0) {
+      validatePassword(value);
     } else {
-      setKeyError('');
+      setPasswordError('');
     }
   };
 
@@ -64,8 +60,8 @@ export const EncryptionForm: React.FC<EncryptionFormProps> = ({
     if (!hasImage) {
       return;
     }
-    if (validateKey(key)) {
-      onSubmit(key, operation);
+    if (validatePassword(password)) {
+      onSubmit(password, operation);
     }
   };
 
@@ -82,43 +78,42 @@ export const EncryptionForm: React.FC<EncryptionFormProps> = ({
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="key" className="text-foreground font-medium">
-            Encryption Key
+          <Label htmlFor="password" className="text-foreground font-medium">
+            Key
           </Label>
           <div className="relative">
             <div className="absolute left-3 top-1/2 transform -translate-y-1/2">
               <Key className="h-4 w-4 text-muted-foreground" />
             </div>
             <Input
-              id="key"
-              type="text"
-              value={key}
-              onChange={handleKeyChange}
-              placeholder="Enter 16-character key"
+              id="password"
+              type="password"
+              value={password}
+              onChange={handlePasswordChange}
+              placeholder="Enter your key"
               className={cn(
                 "pl-10 transition-all duration-300",
-                keyError 
-                  ? "border-destructive focus:border-destructive" 
-                  : key.length === 16 
-                    ? "border-success focus:border-success" 
+                passwordError
+                  ? "border-destructive focus:border-destructive"
+                  : password.trim().length > 0
+                    ? "border-success focus:border-success"
                     : ""
               )}
-              maxLength={16}
             />
           </div>
           <div className="flex items-center justify-between text-xs">
             <span className={cn(
               "transition-colors duration-300",
-              keyError 
-                ? "text-destructive" 
-                : key.length === 16 
-                  ? "text-success" 
+              passwordError
+                ? "text-destructive"
+                : password.trim().length > 0
+                  ? "text-success"
                   : "text-muted-foreground"
             )}>
-              {keyError || `${key.length}/16 characters`}
+              {passwordError || "Use any length key for encryption"}
             </span>
-            {key.length === 16 && !keyError && (
-              <span className="text-success">✓ Valid key</span>
+            {password.trim().length > 0 && !passwordError && (
+              <span className="text-success">✓ Valid password</span>
             )}
           </div>
         </div>
@@ -166,7 +161,7 @@ export const EncryptionForm: React.FC<EncryptionFormProps> = ({
           type="submit"
           variant="gradient"
           className="w-full"
-          disabled={isLoading || !hasImage || key.length !== 16}
+          disabled={isLoading || !hasImage || password.trim().length === 0}
         >
           {isLoading ? (
             <div className="flex items-center space-x-2">

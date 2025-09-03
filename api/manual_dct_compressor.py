@@ -234,7 +234,7 @@ class ManualDCTCompressor:
         return quality / 100.0
 
     def compress(
-        self, image: np.ndarray, quality: int = 75, use_color: bool = True
+        self, image: np.ndarray, quality: int = 60, use_color: bool = True
     ) -> Dict:
         """
         Compress image using manual DCT + quantization.

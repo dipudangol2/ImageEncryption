@@ -62,7 +62,7 @@ const Index = () => {
     setResult(null);
   };
 
-  const handleEncryption = async (key: string, operation: 'encrypt' | 'decrypt') => {
+  const handleEncryption = async (password: string, operation: 'encrypt' | 'decrypt') => {
     if (!selectedImage) {
       toast({
         title: "Error",
@@ -100,7 +100,7 @@ const Index = () => {
       // Create FormData for file upload
       const formData = new FormData();
       formData.append(operation === 'encrypt' ? 'image' : 'file', selectedImage);
-      formData.append('key', key);
+      formData.append('key', password);
       if (operation === 'encrypt') {
         formData.append('quality', '75'); // Default quality
       }
@@ -206,7 +206,7 @@ const Index = () => {
                 </h3>
                 <p className="text-sm text-muted-foreground">
                   This tool uses Advanced Encryption Standard (AES) to securely encrypt and decrypt your images.
-                  Your 16-character key is used to protect your data.
+                  Your password is converted to a secure 128-bit key using SHA-256 hashing.
                 </p>
               </div>
             </div>
@@ -250,7 +250,7 @@ const Index = () => {
                         Ready to Process
                       </h3>
                       <p className="text-sm text-muted-foreground">
-                        Upload an image and enter your encryption key to get started
+                        Upload an image and enter your password to get started
                       </p>
                     </div>
                   </div>
@@ -261,8 +261,8 @@ const Index = () => {
               <Alert className="border-warning/50 bg-warning/10">
                 <AlertTriangle className="h-4 w-4 text-warning" />
                 <AlertDescription className="text-warning-foreground">
-                  <strong>Important:</strong> Keep your encryption key safe.
-                  You'll need the same key to decrypt your image later.
+                  <strong>Important:</strong> Keep your password safe.
+                  You'll need the same password to decrypt your image later.
                 </AlertDescription>
               </Alert>
             </div>

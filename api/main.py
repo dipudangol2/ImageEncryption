@@ -8,6 +8,7 @@ import sys
 import tempfile
 import uuid
 import time
+import hashlib
 from pathlib import Path
 from typing import Optional, Dict, Any
 import shutil
@@ -57,6 +58,22 @@ app.mount("/files", StaticFiles(directory=OUTPUT_DIR), name="files")
 compressor = ManualDCTCompressor()
 file_manager = SecureFileManager(UPLOAD_DIR, OUTPUT_DIR)
 performance_analyzer = PerformanceAnalyzer()
+
+
+def derive_aes_key(password: str) -> bytes:
+    """
+    Derive a 16-byte AES key from any-length password using SHA-256.
+    
+    Args:
+        password: Password of any length
+        
+    Returns:
+        16-byte key for AES-128 encryption
+    """
+    # Create SHA-256 hash of the password
+    sha256_hash = hashlib.sha256(password.encode('utf-8')).digest()
+    # Return first 16 bytes for AES-128
+    return sha256_hash[:16]
 
 
 def serialize_numpy_types(obj):
@@ -162,10 +179,10 @@ async def encrypt_image(
         # Reset performance analyzer for new operation
         performance_analyzer.reset_timing()
 
-        # Validate inputs
-        if len(key) != 16:
+        # Validate inputs - password can be any length
+        if len(key.strip()) == 0:
             raise HTTPException(
-                status_code=400, detail="Key must be exactly 16 characters long"
+                status_code=400, detail="Password cannot be empty"
             )
 
         if not image.content_type or not image.content_type.startswith("image/"):
@@ -219,10 +236,21 @@ async def encrypt_image(
                 img_np = np.array(img)
                 use_color = False
 
+        # Set quality based on file format
+        if original_format.lower() in ['.jpg', '.jpeg']:
+            # JPG files get lower quality for better compression
+            compression_quality = 30
+        elif original_format.lower() == '.png':
+            # PNG files get higher quality
+            compression_quality = 60
+        else:
+            # Other formats (including AVIF) use default quality
+            compression_quality = quality
+        
         # Compress image with timing
         with performance_analyzer.time_operation("compression"):
             compressed_data = compressor.compress(
-                img_np, quality=quality, use_color=use_color
+                img_np, quality=compression_quality, use_color=use_color
             )
 
         # Add original format metadata to compressed data
@@ -230,10 +258,12 @@ async def encrypt_image(
         compressed_data["original_filename"] = (
             image.filename or f"image{original_format}"
         )
+        # Store the actual compression quality used (for stats reporting)
+        compressed_data["actual_quality_used"] = compression_quality
 
         # Encrypt compressed data with timing
         with performance_analyzer.time_operation("encryption"):
-            key_bytes = key.encode("utf-8")
+            key_bytes = derive_aes_key(key)
             cipher = AESCipher(key_bytes)
             compressed_bytes = serialize_compressed_data(compressed_data)
             encrypted_data = cipher.encrypt(compressed_bytes)
@@ -310,6 +340,8 @@ async def encrypt_image(
             "image_channels": int(img_np.shape[2] if len(img_np.shape) > 2 else 1),
             "total_pixels": int(img_np.shape[0] * img_np.shape[1]),
             "image_format": original_format,
+            # Actual compression quality used
+            "quality": compression_quality,
             # File size metrics in bytes for precision
             "original_size_bytes": int(original_file_size),
             "compressed_size_bytes": int(basic_stats["compressed_size"]),
@@ -456,10 +488,10 @@ async def decrypt_image(
         # Reset performance analyzer for new operation
         performance_analyzer.reset_timing()
 
-        # Validate inputs
-        if len(key) != 16:
+        # Validate inputs - password can be any length
+        if len(key.strip()) == 0:
             raise HTTPException(
-                status_code=400, detail="Key must be exactly 16 characters long"
+                status_code=400, detail="Password cannot be empty"
             )
 
         # Read and validate file
@@ -491,7 +523,7 @@ async def decrypt_image(
 
         # Decrypt data with timing
         with performance_analyzer.time_operation("decryption"):
-            key_bytes = key.encode("utf-8")
+            key_bytes = derive_aes_key(key)
             cipher = AESCipher(key_bytes)
             try:
                 decrypted_bytes = cipher.decrypt(encrypted_data)
@@ -511,8 +543,8 @@ async def decrypt_image(
             reconstructed_img = compressor.decompress(compressed_data)
 
         # Extract original format from metadata (with fallback to PNG)
-        original_format = ".jpg"
-        # original_format = compressed_data.get("original_format", ".jpg")
+        # original_format = ".jpg"
+        original_format = compressed_data.get("original_format", ".jpg")
 
         # Save reconstructed image with original format
         output_filename = f"{session_id}_decrypted{original_format}"
@@ -529,7 +561,7 @@ async def decrypt_image(
             "output_size": int(reconstructed_img.nbytes),
             "image_shape": list(reconstructed_img.shape),
             "original_format": original_format,
-            "quality": compressed_data.get("quality", 75),
+            "quality": compressed_data.get("actual_quality_used", compressed_data.get("quality", 75)),
             "output_size_display": (
                 f"{reconstructed_img.nbytes / 1024:.1f} KB"
                 if reconstructed_img.nbytes >= 1024
