@@ -95,13 +95,15 @@ export const ResultDisplay: React.FC<ResultDisplayProps> = ({
 
   const handleDownload = (fileUrl: string, filename: string) => {
     // Create download link
+    const file = fileUrl.split('/').pop();
     const link = document.createElement('a');
-    link.href = `http://localhost:8000${fileUrl}`;
-    link.download = filename;
+    link.href = `http://localhost:8000/api/download/${file}`;
+    link.setAttribute('download', filename);
+    link.setAttribute('target', '_blank');
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    if (onDownload) onDownload();
+    // if (onDownload) onDownload();
   };
 
   return (
@@ -161,7 +163,7 @@ export const ResultDisplay: React.FC<ResultDisplayProps> = ({
                       alt="Encrypted data visualization"
                       className="w-full h-32 object-cover"
                     />
-                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center z-50">
                       <Button
                         variant="default"
                         onClick={() => handleDownload(result.files!.visualization!, 'encrypted_visualization.png')}
@@ -176,6 +178,7 @@ export const ResultDisplay: React.FC<ResultDisplayProps> = ({
                     <div className="flex items-center space-x-3">
                       <ImageIcon className="h-5 w-5 text-accent" />
                       <div>
+                        <p>{result.files!.visualization!}</p>
                         <p className="text-sm font-medium text-foreground">Visualization</p>
                         <p className="text-xs text-muted-foreground">For histogram analysis</p>
                       </div>
@@ -242,7 +245,7 @@ export const ResultDisplay: React.FC<ResultDisplayProps> = ({
                   </div>
                   <h3 className="text-lg font-semibold text-foreground">Original Image Histogram</h3>
                 </div>
-                
+
                 <div className="w-full">
                   <HistogramPanel
                     title=""
@@ -262,7 +265,7 @@ export const ResultDisplay: React.FC<ResultDisplayProps> = ({
                   </div>
                   <h3 className="text-lg font-semibold text-foreground">Encrypted Image Histogram</h3>
                 </div>
-                
+
                 <div className="w-full">
                   <HistogramPanel
                     title=""
@@ -270,9 +273,9 @@ export const ResultDisplay: React.FC<ResultDisplayProps> = ({
                     overallEntropy={result.stats.encrypted_entropy}
                   />
                 </div>
-                
+
                 <div className="p-3 text-xs text-muted-foreground bg-success/10 rounded border-l-2 border-success">
-                  <strong className="text-success">Security Indicator:</strong><br/>
+                  <strong className="text-success">Security Indicator:</strong><br />
                   Higher entropy values (closer to 8.0) indicate better encryption randomness and security.
                 </div>
               </div>
@@ -326,7 +329,7 @@ export const ResultDisplay: React.FC<ResultDisplayProps> = ({
                       <span className="ml-1 font-medium">{result.stats.total_processing_time}s</span>
                     </div>
                   )}
-                  
+
                   {/* Show encryption-specific timing only for encrypt operation */}
                   {result.operation === 'encrypt' && result.stats.compression_time && result.stats.compression_time > 0 && (
                     <div>
@@ -346,7 +349,7 @@ export const ResultDisplay: React.FC<ResultDisplayProps> = ({
                       <span className="ml-1 font-medium">{result.stats.visualization_time}s</span>
                     </div>
                   )}
-                  
+
                   {/* Show decryption-specific timing only for decrypt operation */}
                   {result.operation === 'decrypt' && result.stats.decryption_time && result.stats.decryption_time > 0 && (
                     <div>

@@ -4,6 +4,7 @@ Provides REST API endpoints for the React frontend.
 """
 
 import sys
+import os
 import time
 import hashlib
 from pathlib import Path
