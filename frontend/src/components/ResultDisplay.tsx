@@ -97,7 +97,7 @@ export const ResultDisplay: React.FC<ResultDisplayProps> = ({
     // Create download link
     const file = fileUrl.split('/').pop();
     const link = document.createElement('a');
-    link.href = `http://localhost:8000/api/download/${file}`;
+    link.href = `/api/download/${file}`;
     link.setAttribute('download', filename);
     link.setAttribute('target', '_blank');
     document.body.appendChild(link);
@@ -159,7 +159,7 @@ export const ResultDisplay: React.FC<ResultDisplayProps> = ({
                 <div className="space-y-2">
                   <div className="relative group rounded-lg overflow-hidden border border-border/50">
                     <img
-                      src={`http://localhost:8000${result.files.visualization}`}
+                      src={`${import.meta.env.VITE_SERVER_URL}${result.files.visualization}`}
                       alt="Encrypted data visualization"
                       className="w-full h-32 object-cover"
                     />
@@ -200,7 +200,7 @@ export const ResultDisplay: React.FC<ResultDisplayProps> = ({
                 <div className="space-y-2">
                   <div className="relative group rounded-lg overflow-hidden border border-border/50">
                     <img
-                      src={`http://localhost:8000${result.files.decrypted_image}`}
+                      src={`${import.meta.env.VITE_SERVER_URL}${result.files.decrypted_image}`}
                       alt="Decrypted image"
                       className="w-full h-48 object-cover"
                     />

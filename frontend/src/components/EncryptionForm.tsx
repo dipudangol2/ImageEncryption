@@ -150,8 +150,8 @@ export const EncryptionForm: React.FC<EncryptionFormProps> = ({
 
         {!hasImage && (
           <Alert className="border-warning/50 bg-warning/10">
-            <AlertTriangle className="h-4 w-4 text-warning" />
-            <AlertDescription className="text-warning-foreground">
+            <AlertTriangle className="h-4 w-4 text-warnin" />
+            <AlertDescription className="text-warning">
               Please select a file first. Use images (.jpg, .png, .jpeg) for encryption or .bin files for decryption.
             </AlertDescription>
           </Alert>

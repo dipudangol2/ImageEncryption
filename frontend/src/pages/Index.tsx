@@ -107,7 +107,7 @@ const Index = () => {
 
       // Call appropriate endpoint
       const endpoint = operation === 'encrypt' ? '/api/encrypt' : '/api/decrypt';
-      const response = await fetch(`http://localhost:8000${endpoint}`, {
+      const response = await fetch(`${import.meta.env.VITE_SERVER_URL}${endpoint}`, {
         method: 'POST',
         body: formData,
       });
@@ -194,23 +194,7 @@ const Index = () => {
       <div className="container mx-auto px-4 py-8">
         <div className="max-w-6xl mx-auto space-y-8">
 
-          {/* Info Card */}
-          <Card className="p-6 bg-gradient-accent border-primary/20">
-            <div className="flex items-start space-x-4">
-              <div className="p-2 rounded-lg bg-primary/10">
-                <Lock className="h-5 w-5 text-primary" />
-              </div>
-              <div className="space-y-2">
-                <h3 className="font-semibold text-foreground">
-                  AES Encryption Security
-                </h3>
-                <p className="text-sm text-muted-foreground">
-                  This tool uses Advanced Encryption Standard (AES) to securely encrypt and decrypt your images.
-                  Your password is converted to a secure 128-bit key using SHA-256 hashing.
-                </p>
-              </div>
-            </div>
-          </Card>
+        
 
           {/* Main Grid */}
           <div className="grid lg:grid-cols-2 gap-8">
@@ -257,14 +241,6 @@ const Index = () => {
                 </Card>
               )}
 
-              {/* Warning Alert */}
-              <Alert className="border-warning/50 bg-warning/10">
-                <AlertTriangle className="h-4 w-4 text-warning" />
-                <AlertDescription className="text-warning-foreground">
-                  <strong>Important:</strong> Keep your password safe.
-                  You'll need the same password to decrypt your image later.
-                </AlertDescription>
-              </Alert>
             </div>
           </div>
         </div>
