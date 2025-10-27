@@ -12,7 +12,7 @@ import uuid
 import hashlib
 
 
-class SecureFileManager:
+class FileManager:
     """
     Manages file uploads, downloads, and cleanup with security features.
     """
@@ -25,8 +25,8 @@ class SecureFileManager:
     # Maximum file size (50MB)
     MAX_FILE_SIZE = 50 * 1024 * 1024
 
-    # File cleanup timeout (3 minutes)
-    CLEANUP_TIMEOUT = 3 * 60
+    # File cleanup timeout (5 minutes)
+    CLEANUP_TIMEOUT = 1 * 60
 
     def __init__(self, upload_dir: Path, output_dir: Path):
         self.upload_dir = upload_dir
@@ -36,7 +36,17 @@ class SecureFileManager:
 
         # Track files for cleanup
         self.file_tracker: dict = {}
+        self._reload_existing_files()
         self._start_cleanup_thread()
+
+    def _reload_existing_files(self):
+        for dir_path in [self.upload_dir, self.output_dir]:
+            for file in dir_path.glob("*"):
+                file_age = time.time() - file.stat().st_mtime
+                if file_age > self.CLEANUP_TIMEOUT:
+                    self._safe_remove_file(file)
+                else:
+                    self.file_tracker[str(file)] = time.time() - file_age
 
     def _start_cleanup_thread(self):
         """Start background thread for file cleanup."""

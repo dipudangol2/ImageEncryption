@@ -12,7 +12,7 @@ from typing import Optional, Dict, Any
 
 
 # Add parent directory to path to import our modules
-sys.path.append(str(Path(__file__).parent.parent))
+# sys.path.append(str(Path(__file__).parent.parent))
 
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
@@ -22,10 +22,10 @@ import numpy as np
 from PIL import Image
 import pickle
 
-from server.services.aes_cipher import AESCipher
-from server.services.manual_dct_compressor import ManualDCTCompressor
-from server.services.file_manager import SecureFileManager
-from server.services.performance_analyzer import PerformanceAnalyzer
+from services.AES import AESCipher
+from services.DCT import DCTCompressor
+from services.file_manager import FileManager
+from services.performance_analyzer import PerformanceAnalyzer
 
 app = FastAPI(title="Image Encryption API", version="1.0.0")
 
@@ -36,7 +36,8 @@ app.add_middleware(
         "http://localhost:5173",
         "http://localhost:3000",
         "http://localhost:8081",
-        "*",
+        "http://localhost",
+        
     ],  # React dev servers
     allow_credentials=True,
     allow_methods=["*"],
@@ -53,8 +54,8 @@ OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 app.mount("/files", StaticFiles(directory=OUTPUT_DIR), name="files")
 
 # Global instances - Using Manual DCT with Quantization (REAL COMPRESSION!)
-compressor = ManualDCTCompressor()
-file_manager = SecureFileManager(UPLOAD_DIR, OUTPUT_DIR)
+compressor = DCTCompressor()
+file_manager = FileManager(UPLOAD_DIR, OUTPUT_DIR)
 performance_analyzer = PerformanceAnalyzer()
 
 
@@ -637,7 +638,7 @@ async def download_file(filename: str, background_tasks: BackgroundTasks):
         raise HTTPException(status_code=404, detail="File not found")
 
     # Schedule cleanup after download
-    background_tasks.add_task(file_manager.schedule_cleanup, file_path, 60)
+    background_tasks.add_task(file_manager.schedule_cleanup, file_path, 90)
 
     # Determine media type
     if filename.endswith(".bin"):
