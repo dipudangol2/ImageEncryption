@@ -37,6 +37,7 @@ app.add_middleware(
         "http://localhost:3000",
         "http://localhost:8081",
         "http://localhost",
+        "https://app-v1-0-wieq.onrender.com",
         
     ],  # React dev servers
     allow_credentials=True,
@@ -61,7 +62,7 @@ performance_analyzer = PerformanceAnalyzer()
 
 def derive_aes_key(password: str) -> bytes:
     """
-    Derive a 16-byte AES key from any-length password using SHA-256.
+    Derive a 16-byte AES key from any-length password using SHA-256 and using the first half.
 
     Args:
         password: Password of any length
@@ -206,7 +207,7 @@ async def encrypt_image(
             file_content, image.filename or "image"
         )
 
-        # Extract original file format for preservation
+        # Extract original file format for preservation``
         original_format = Path(image.filename or "image.png").suffix.lower()
         if original_format not in [".jpg", ".jpeg", ".png"]:
             original_format = ".png"  # Default to PNG for unsupported formats
@@ -676,4 +677,4 @@ async def process_image_legacy(
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

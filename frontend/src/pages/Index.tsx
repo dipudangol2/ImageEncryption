@@ -51,6 +51,7 @@ const Index = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [result, setResult] = useState<ProcessResult | null>(null);
   const { toast } = useToast();
+  const baseUrl = import.meta.env.VITE_SERVER_URL ?? "";
 
   const handleImageSelect = (file: File) => {
     setSelectedImage(file);
@@ -107,7 +108,7 @@ const Index = () => {
 
       // Call appropriate endpoint
       const endpoint = operation === 'encrypt' ? '/api/encrypt' : '/api/decrypt';
-      const response = await fetch(`${import.meta.env.VITE_SERVER_URL}${endpoint}`, {
+      const response = await fetch(`${baseUrl}${endpoint}`, {
         method: 'POST',
         body: formData,
       });
@@ -194,7 +195,7 @@ const Index = () => {
       <div className="container mx-auto px-4 py-8">
         <div className="max-w-6xl mx-auto space-y-8">
 
-        
+
 
           {/* Main Grid */}
           <div className="grid lg:grid-cols-2 gap-8">

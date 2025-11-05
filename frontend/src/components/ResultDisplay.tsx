@@ -92,6 +92,7 @@ export const ResultDisplay: React.FC<ResultDisplayProps> = ({
   onReset,
 }) => {
   if (!result) return null;
+  const baseUrl = import.meta.env.VITE_SERVER_URL ?? "";
 
   const handleDownload = (fileUrl: string, filename: string) => {
     // Create download link
@@ -159,7 +160,7 @@ export const ResultDisplay: React.FC<ResultDisplayProps> = ({
                 <div className="space-y-2">
                   <div className="relative group rounded-lg overflow-hidden border border-border/50">
                     <img
-                      src={`${import.meta.env.VITE_SERVER_URL}${result.files.visualization}`}
+                      src={`${baseUrl}${result.files.visualization}`}
                       alt="Encrypted data visualization"
                       className="w-full h-32 object-cover"
                     />
@@ -200,7 +201,7 @@ export const ResultDisplay: React.FC<ResultDisplayProps> = ({
                 <div className="space-y-2">
                   <div className="relative group rounded-lg overflow-hidden border border-border/50">
                     <img
-                      src={`${import.meta.env.VITE_SERVER_URL}${result.files.decrypted_image}`}
+                      src={`${baseUrl}${result.files.decrypted_image}`}
                       alt="Decrypted image"
                       className="w-full h-48 object-cover"
                     />
