@@ -5,3 +5,4 @@ outputs/
 uploads/
 images/
 server/README.Docker.md
+.env
