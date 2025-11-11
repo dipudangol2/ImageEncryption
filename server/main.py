@@ -839,6 +839,10 @@ async def comprehensive_analysis(
         output_filename = f"{decrypted_session_id}_decrypted{original_format}"
         output_path = file_manager.get_output_path(output_filename)
         save_image_from_array(reconstructed_img, str(output_path), original_format)
+
+        # Get file sizes for comparison
+        original_file_size = original_upload_path.stat().st_size
+        decrypted_file_size = output_path.stat().st_size
         
         # Serialize data for JSON response
         performance_report_serialized = serialize_numpy_types(performance_report)
@@ -863,6 +867,19 @@ async def comprehensive_analysis(
             "decrypted": f"/files/{decrypted_session_id}_decrypted{original_format}"
         }
         
+        # Helper function to format file sizes
+        def format_size(size_bytes):
+            if size_bytes < 1024:
+                return f"{size_bytes} bytes"
+            elif size_bytes < 1024 * 1024:
+                return f"{size_bytes / 1024:.1f} KB"
+            else:
+                return f"{size_bytes / (1024 * 1024):.1f} MB"
+
+        # Calculate file size difference
+        size_difference = decrypted_file_size - original_file_size
+        size_difference_percent = (size_difference / original_file_size) * 100 if original_file_size > 0 else 0
+
         # Calculate comprehensive comparison metrics
         comparison_metrics = {
             "quality_comparison": {
@@ -880,7 +897,19 @@ async def comprehensive_analysis(
                 "decompression_time": round(float(timing_data["operations"].get("decompression", 0)), 3),
                 "analysis_time": round(float(timing_data["operations"].get("analysis", 0)), 3)
             },
-            "compression_analysis": performance_report_serialized["compression_metrics"]
+            "compression_analysis": performance_report_serialized["compression_metrics"],
+            "file_size_comparison": {
+                "original_file_size": original_file_size,
+                "original_file_size_display": format_size(original_file_size),
+                "decrypted_file_size": decrypted_file_size,
+                "decrypted_file_size_display": format_size(decrypted_file_size),
+                "size_difference": size_difference,
+                "size_difference_display": format_size(abs(size_difference)),
+                "size_difference_percent": round(size_difference_percent, 2),
+                "is_larger": size_difference > 0,
+                "is_smaller": size_difference < 0,
+                "is_same": size_difference == 0
+            }
         }
         
         return {

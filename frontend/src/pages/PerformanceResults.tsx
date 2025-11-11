@@ -66,6 +66,18 @@ interface ComprehensiveAnalysis {
       analysis_time: number;
     };
     compression_analysis: any;
+    file_size_comparison?: {
+      original_file_size: number;
+      original_file_size_display: string;
+      decrypted_file_size: number;
+      decrypted_file_size_display: string;
+      size_difference: number;
+      size_difference_display: string;
+      size_difference_percent: number;
+      is_larger: boolean;
+      is_smaller: boolean;
+      is_same: boolean;
+    };
   };
   detailed_metrics: any;
   summary: {
@@ -124,7 +136,8 @@ const ImageColumn: React.FC<{
   histogramData: HistogramData;
   icon: React.ReactNode;
   variant: 'original' | 'encrypted' | 'decrypted';
-}> = ({ title, imageUrl, histogramData, icon, variant }) => {
+  fileSize?: string;
+}> = ({ title, imageUrl, histogramData, icon, variant, fileSize }) => {
   const baseUrl = import.meta.env.VITE_SERVER_URL ?? "";
   
   const variantStyles = {
@@ -172,6 +185,14 @@ const ImageColumn: React.FC<{
 
         {/* Statistics */}
         <div className="grid grid-cols-2 gap-3">
+          {fileSize && (
+            <MetricCard
+              title="File Size"
+              value={fileSize}
+              description="Storage size"
+              variant="info"
+            />
+          )}
           <MetricCard
             title="Entropy"
             value={histogramData.entropy}
@@ -339,6 +360,7 @@ export default function PerformanceResults() {
             histogramData={comprehensive_analysis.histogram_data.original}
             icon={<ImageIcon className="h-5 w-5 text-accent" />}
             variant="original"
+            fileSize={comprehensive_analysis.comparison_metrics.file_size_comparison?.original_file_size_display}
           />
           <ImageColumn
             title="Encrypted Visualization"
@@ -353,6 +375,7 @@ export default function PerformanceResults() {
             histogramData={comprehensive_analysis.histogram_data.decrypted}
             icon={<CheckCircle className="h-5 w-5 text-success" />}
             variant="decrypted"
+            fileSize={comprehensive_analysis.comparison_metrics.file_size_comparison?.decrypted_file_size_display}
           />
         </div>
 
@@ -489,6 +512,74 @@ export default function PerformanceResults() {
                   </>
                 )}
               </div>
+
+              {/* File Size Comparison Section */}
+              {comprehensive_analysis.comparison_metrics.file_size_comparison && (
+                <div className="mt-6 space-y-4">
+                  <Separator />
+                  <div>
+                    <h3 className="text-lg font-semibold text-foreground mb-4 flex items-center">
+                      <Activity className="h-5 w-5 mr-2" />
+                      File Size Comparison
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="p-4 rounded-lg border bg-accent/10 border-accent/30">
+                        <h4 className="text-sm font-medium text-muted-foreground mb-2">Original Image</h4>
+                        <div className="text-2xl font-bold text-foreground">
+                          {comprehensive_analysis.comparison_metrics.file_size_comparison.original_file_size_display}
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1">Source file size</p>
+                      </div>
+
+                      <div className="p-4 rounded-lg border bg-success/10 border-success/30">
+                        <h4 className="text-sm font-medium text-muted-foreground mb-2">Decrypted Image</h4>
+                        <div className="text-2xl font-bold text-foreground">
+                          {comprehensive_analysis.comparison_metrics.file_size_comparison.decrypted_file_size_display}
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1">Recovered file size</p>
+                      </div>
+
+                      <div className={`p-4 rounded-lg border ${
+                        comprehensive_analysis.comparison_metrics.file_size_comparison.is_same
+                          ? 'bg-success/10 border-success/30'
+                          : comprehensive_analysis.comparison_metrics.file_size_comparison.is_smaller
+                          ? 'bg-success/10 border-success/30'
+                          : 'bg-warning/10 border-warning/30'
+                      }`}>
+                        <h4 className="text-sm font-medium text-muted-foreground mb-2">Size Difference</h4>
+                        <div className="text-2xl font-bold text-foreground flex items-center">
+                          {comprehensive_analysis.comparison_metrics.file_size_comparison.is_same && '='}
+                          {comprehensive_analysis.comparison_metrics.file_size_comparison.is_larger && '+'}
+                          {comprehensive_analysis.comparison_metrics.file_size_comparison.is_smaller && '-'}
+                          {comprehensive_analysis.comparison_metrics.file_size_comparison.size_difference_display}
+                        </div>
+                        <div className="flex items-center mt-1">
+                          <Badge
+                            variant={
+                              comprehensive_analysis.comparison_metrics.file_size_comparison.is_same
+                                ? 'default'
+                                : comprehensive_analysis.comparison_metrics.file_size_comparison.is_smaller
+                                ? 'default'
+                                : 'secondary'
+                            }
+                            className="text-xs"
+                          >
+                            {comprehensive_analysis.comparison_metrics.file_size_comparison.size_difference_percent > 0 ? '+' : ''}
+                            {comprehensive_analysis.comparison_metrics.file_size_comparison.size_difference_percent.toFixed(2)}%
+                          </Badge>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 p-4 rounded-lg bg-muted/30 border border-border/50">
+                      <p className="text-sm text-muted-foreground">
+                        <strong>Note:</strong> File size differences may occur due to image format encoding, compression settings, and metadata.
+                        The encryption/decryption process preserves image data while the final file size depends on the output format.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
             </TabsContent>
           </Tabs>
         </Card>
