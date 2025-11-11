@@ -146,7 +146,7 @@ class DCTCompressor:
                 # Quantize
                 quantized = np.round(dct_coeffs / quant_matrix).astype(np.int16)
 
-                # Store only non-zero coefficients with their positions
+                # Store non-zero coefficients with their positions
                 flat_quantized = quantized.flatten()
                 non_zero_indices = np.nonzero(flat_quantized)[0]
                 non_zero_values = flat_quantized[non_zero_indices]

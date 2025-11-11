@@ -151,7 +151,7 @@ class AESCipher:
 
         # start with original key as 16 bytes
         w = [b for b in key_bytes]  # expanded key bytes
-        # we need 11 round keys * 16 = 176 bytes (current 16 -> need +160)
+        # we need 11 round keys * 16 = 176 bytes 
         for i in range(10):
             # last 4 bytes of current key block
             t0, t1, t2, t3 = w[-4], w[-3], w[-2], w[-1]

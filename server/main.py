@@ -7,8 +7,10 @@ import sys
 import os
 import time
 import hashlib
+import uuid
 from pathlib import Path
 from typing import Optional, Dict, Any
+
 
 
 # Add parent directory to path to import our modules
@@ -546,9 +548,23 @@ async def decrypt_image(
         output_path = file_manager.get_output_path(output_filename)
         save_image_from_array(reconstructed_img, str(output_path), original_format)
 
+        # Generate comprehensive histogram analysis for decrypted image
+        with performance_analyzer.time_operation("analysis"):
+            decrypted_histogram = performance_analyzer.analyze_histogram(reconstructed_img)
+
         # Get timing report
         timing_data = performance_analyzer.get_timing_report()
         total_time = timing_data.get("total_time", 0)
+
+        # Serialize histogram data for JSON response
+        decrypted_histogram_serialized = serialize_numpy_types(decrypted_histogram)
+
+        # Calculate entropy for summary
+        decrypted_entropy = (
+            decrypted_histogram_serialized["entropy"]
+            if decrypted_histogram_serialized["type"] == "grayscale"
+            else decrypted_histogram_serialized["channels"]["red"]["entropy"]
+        )
 
         # Build comprehensive stats for decryption
         comprehensive_stats = {
@@ -582,6 +598,9 @@ async def decrypt_image(
             "decompression_time": round(
                 float(timing_data["operations"].get("decompression", 0)), 3
             ),
+            "analysis_time": round(
+                float(timing_data["operations"].get("analysis", 0)), 3
+            ),
             # Initialize other timing fields to 0 for consistency
             "compression_time": 0,
             "encryption_time": 0,
@@ -593,6 +612,8 @@ async def decrypt_image(
                 float(np.max(reconstructed_img) - np.min(reconstructed_img)), 2
             ),
             "unique_values": int(len(np.unique(reconstructed_img))),
+            # Entropy analysis for decrypted image
+            "decrypted_entropy": round(float(decrypted_entropy), 2),
             # File size efficiency
             "bytes_per_pixel": round(
                 float(
@@ -601,6 +622,22 @@ async def decrypt_image(
                 ),
                 2,
             ),
+            # Detailed histogram analysis for comprehensive results page
+            "detailed_metrics": {
+                "histogram_analysis": {
+                    "decrypted": decrypted_histogram_serialized
+                },
+                "timing_analysis": timing_data,
+                "image_properties": {
+                    "format": original_format,
+                    "quality": compressed_data.get("actual_quality_used", compressed_data.get("quality", 75)),
+                    "dimensions": {
+                        "width": int(reconstructed_img.shape[1]),
+                        "height": int(reconstructed_img.shape[0]),
+                        "channels": int(reconstructed_img.shape[2] if len(reconstructed_img.shape) > 2 else 1)
+                    }
+                }
+            }
         }
 
         # Files will be automatically cleaned up by the background thread after 30 minutes
@@ -619,6 +656,256 @@ async def decrypt_image(
     except Exception as e:
         # No immediate cleanup on error - let time-based cleanup handle it
         raise HTTPException(status_code=500, detail=f"Decryption failed: {str(e)}")
+
+
+@app.post("/api/comprehensive-analysis")
+async def comprehensive_analysis(
+    background_tasks: BackgroundTasks,
+    encrypted_file: UploadFile = File(...),
+    key: str = Form(...),
+    original_session_id: str = Form(...),
+):
+    """
+    Perform comprehensive three-way analysis (original, encrypted, decrypted).
+    
+    This endpoint is designed for the results page to get complete comparison data.
+    It requires the original image session data and performs decryption analysis.
+    
+    Args:
+        encrypted_file: The encrypted .bin file
+        key: Decryption password
+        original_session_id: Session ID from the original encryption operation
+        
+    Returns:
+        Complete three-way analysis data for results page
+    """
+    try:
+        # Reset performance analyzer for new operation
+        performance_analyzer.reset_timing()
+        
+        # Validate inputs
+        if len(key.strip()) == 0:
+            raise HTTPException(status_code=400, detail="Password cannot be empty")
+            
+        if not original_session_id:
+            raise HTTPException(status_code=400, detail="Original session ID required")
+        
+        # Check if original files exist
+        original_upload_path = None
+        original_visualization_path = None
+        
+        # Try to find original files by session ID
+        try:
+            upload_files = list(UPLOAD_DIR.glob(f"{original_session_id}_upload.*"))
+            for file_path in upload_files:
+                if file_path.suffix.lower() in ['.jpg', '.jpeg', '.png']:
+                    original_upload_path = file_path
+                    break
+                    
+            viz_files = list(OUTPUT_DIR.glob(f"{original_session_id}_visualization.*"))
+            for file_path in viz_files:
+                if file_path.suffix.lower() == '.png':
+                    original_visualization_path = file_path
+                    break
+        except Exception as e:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error searching for session files: {str(e)}"
+            )
+        
+        if not original_upload_path:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Original image file not found for session {original_session_id}. It may have been cleaned up."
+            )
+            
+        if not original_visualization_path:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Encrypted visualization not found for session {original_session_id}. It may have been cleaned up."
+            )
+        
+        # Read and validate encrypted file
+        encrypted_content = await encrypted_file.read()
+        is_valid, error_msg = file_manager.validate_file(
+            encrypted_content, encrypted_file.filename or "unknown", encrypted_file.content_type
+        )
+        
+        if not is_valid:
+            raise HTTPException(status_code=400, detail=error_msg)
+            
+        if not (encrypted_file.filename and encrypted_file.filename.endswith(".bin")):
+            raise HTTPException(status_code=400, detail="File must be a .bin file")
+        
+        # Decrypt data with timing
+        with performance_analyzer.time_operation("decryption"):
+            key_bytes = derive_aes_key(key)
+            cipher = AESCipher(key_bytes)
+            try:
+                decrypted_bytes = cipher.decrypt(encrypted_content)
+            except Exception as e:
+                raise HTTPException(
+                    status_code=400, detail="Decryption failed. Check your password."
+                )
+        
+        # Deserialize compressed data
+        try:
+            compressed_data = deserialize_compressed_data(decrypted_bytes)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail="Invalid encrypted file format")
+        
+        # Decompress image with timing
+        with performance_analyzer.time_operation("decompression"):
+            reconstructed_img = compressor.decompress(compressed_data)
+        
+        # Load original image and encrypted visualization
+        with performance_analyzer.time_operation("analysis"):
+            try:
+                # Load original image
+                original_pil = Image.open(original_upload_path)
+                
+                # Convert to match reconstructed image format (same as encryption does)
+                if len(reconstructed_img.shape) == 2:
+                    # Reconstructed is grayscale
+                    if original_pil.mode != "L":
+                        original_pil = original_pil.convert("L")
+                else:
+                    # Reconstructed is RGB
+                    if original_pil.mode != "RGB":
+                        original_pil = original_pil.convert("RGB")
+                
+                original_img = np.array(original_pil)
+                encrypted_visualization = np.array(Image.open(original_visualization_path))
+                
+                # Now shapes should match for PSNR calculation
+                psnr = performance_analyzer.calculate_psnr(original_img, reconstructed_img)
+                mse = ((255.0 / (10 ** (psnr / 20))) ** 2) if psnr != float('inf') else 0.0
+                
+                # For NPCR/UACI, resize encrypted visualization to match original for proper comparison
+                encrypted_resized = performance_analyzer._resize_to_match(encrypted_visualization, original_img.shape)
+                npcr = performance_analyzer.calculate_npcr(original_img, encrypted_resized)
+                uaci = performance_analyzer.calculate_uaci(original_img, encrypted_resized)
+                encryption_strength = performance_analyzer.evaluate_encryption_strength(npcr, uaci)
+                
+                # Analyze histograms for all three images
+                original_histogram = performance_analyzer.analyze_histogram(original_img)
+                encrypted_histogram = performance_analyzer.analyze_histogram(encrypted_visualization)
+                decrypted_histogram = performance_analyzer.analyze_histogram(reconstructed_img)
+                
+                # Compression efficiency
+                compression_metrics = performance_analyzer.analyze_compression_efficiency(original_img, compressed_data)
+                
+                # Build comprehensive performance report manually
+                performance_report = {
+                    'quality_metrics': {
+                        'psnr': psnr,
+                        'mse': mse
+                    },
+                    'encryption_metrics': {
+                        'npcr': npcr,
+                        'uaci': uaci,
+                        'strength_evaluation': encryption_strength
+                    },
+                    'compression_metrics': compression_metrics,
+                    'histogram_analysis': {
+                        'original': original_histogram,
+                        'encrypted': encrypted_histogram,
+                        'decrypted': decrypted_histogram
+                    },
+                    'timing_analysis': {},  # Will be filled below
+                    'summary': {
+                        'overall_quality': 'Excellent' if psnr > 40 else 'Good' if psnr > 30 else 'Fair' if psnr > 20 else 'Poor',
+                        'encryption_security': encryption_strength['strength_level'],
+                        'compression_efficiency': 'High' if compression_metrics['compression_ratio'] > 5 else 'Medium' if compression_metrics['compression_ratio'] > 2 else 'Low'
+                    }
+                }
+                
+            except Exception as e:
+                print(f"Analysis error: {str(e)}")
+                import traceback
+                traceback.print_exc()
+                # More detailed error logging
+                print(f"Original image shape: {original_img.shape if 'original_img' in locals() else 'Not loaded'}")
+                print(f"Reconstructed image shape: {reconstructed_img.shape if 'reconstructed_img' in locals() else 'Not loaded'}")
+                print(f"Encrypted visualization shape: {encrypted_visualization.shape if 'encrypted_visualization' in locals() else 'Not loaded'}")
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Analysis failed: {str(e)}"
+                )
+        
+        # Save decrypted image for results page
+        decrypted_session_id = str(uuid.uuid4())
+        original_format = compressed_data.get("original_format", ".png")
+        output_filename = f"{decrypted_session_id}_decrypted{original_format}"
+        output_path = file_manager.get_output_path(output_filename)
+        save_image_from_array(reconstructed_img, str(output_path), original_format)
+        
+        # Serialize data for JSON response
+        performance_report_serialized = serialize_numpy_types(performance_report)
+        timing_data = performance_analyzer.get_timing_report()
+        total_time = timing_data.get("total_time", 0)
+        
+        # Build file URLs for three-way comparison
+        # Note: The upload files are in UPLOAD_DIR, not OUTPUT_DIR, so they aren't served by /files/
+        # We need to copy the original file to OUTPUT_DIR for serving
+        original_output_filename = f"{original_session_id}_original{Path(original_upload_path).suffix}"
+        original_output_path = file_manager.get_output_path(original_output_filename)
+        
+        # Copy original file to output directory if it doesn't exist there
+        if not original_output_path.exists():
+            import shutil
+            shutil.copy2(original_upload_path, original_output_path)
+            file_manager.file_tracker[str(original_output_path)] = time.time()
+        
+        file_urls = {
+            "original": f"/files/{original_output_filename}",
+            "encrypted_visualization": f"/files/{original_session_id}_visualization.png",
+            "decrypted": f"/files/{decrypted_session_id}_decrypted{original_format}"
+        }
+        
+        # Calculate comprehensive comparison metrics
+        comparison_metrics = {
+            "quality_comparison": {
+                "psnr_original_vs_decrypted": performance_report_serialized["quality_metrics"]["psnr"],
+                "mse_original_vs_decrypted": performance_report_serialized["quality_metrics"]["mse"]
+            },
+            "encryption_security": {
+                "npcr_original_vs_encrypted": performance_report_serialized["encryption_metrics"]["npcr"],
+                "uaci_original_vs_encrypted": performance_report_serialized["encryption_metrics"]["uaci"],
+                "encryption_strength": performance_report_serialized["encryption_metrics"]["strength_evaluation"]["strength_level"]
+            },
+            "timing_breakdown": {
+                "total_time": round(float(total_time), 3),
+                "decryption_time": round(float(timing_data["operations"].get("decryption", 0)), 3),
+                "decompression_time": round(float(timing_data["operations"].get("decompression", 0)), 3),
+                "analysis_time": round(float(timing_data["operations"].get("analysis", 0)), 3)
+            },
+            "compression_analysis": performance_report_serialized["compression_metrics"]
+        }
+        
+        return {
+            "success": True,
+            "session_ids": {
+                "original": original_session_id,
+                "decrypted": decrypted_session_id
+            },
+            "files": file_urls,
+            "comprehensive_analysis": {
+                "histogram_data": {
+                    "original": performance_report_serialized["histogram_analysis"]["original"],
+                    "encrypted": performance_report_serialized["histogram_analysis"]["encrypted"],
+                    "decrypted": performance_report_serialized["histogram_analysis"]["decrypted"]
+                },
+                "comparison_metrics": comparison_metrics,
+                "detailed_metrics": performance_report_serialized,
+                "summary": performance_report_serialized["summary"]
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
 
 
 @app.get("/api/download/{filename}")
@@ -676,4 +963,4 @@ async def process_image_legacy(
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

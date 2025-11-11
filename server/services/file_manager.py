@@ -25,8 +25,8 @@ class FileManager:
     # Maximum file size (50MB)
     MAX_FILE_SIZE = 50 * 1024 * 1024
 
-    # File cleanup timeout (5 minutes)
-    CLEANUP_TIMEOUT = 1 * 60
+    # File cleanup timeout (3 minutes)
+    CLEANUP_TIMEOUT = 3 * 60
 
     def __init__(self, upload_dir: Path, output_dir: Path):
         self.upload_dir = upload_dir

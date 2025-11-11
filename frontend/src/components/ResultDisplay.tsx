@@ -2,12 +2,13 @@ import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Download, CheckCircle, XCircle, Shield, Image as ImageIcon, BarChart3, Activity } from 'lucide-react';
+import { Download, CheckCircle, XCircle, Shield, Image as ImageIcon, BarChart3, Activity, Unlock } from 'lucide-react';
 import { HistogramPanel } from './HistogramPanel';
 
 interface ResultDisplayProps {
   result: {
     success: boolean;
+    session_id?: string;
     files?: {
       encrypted_bin?: string;
       visualization?: string;
@@ -84,14 +85,19 @@ interface ResultDisplayProps {
   } | null;
   onDownload?: () => void;
   onReset: () => void;
+  onDecrypt?: (sessionId: string, encryptedFile: string) => void;
+  currentPassword?: string;
 }
 
 export const ResultDisplay: React.FC<ResultDisplayProps> = ({
   result,
   onDownload,
   onReset,
+  onDecrypt,
+  currentPassword,
 }) => {
   if (!result) return null;
+  const baseUrl: string = import.meta.env.VITE_SERVER_URL ?? "";
 
   const handleDownload = (fileUrl: string, filename: string) => {
     // Create download link
@@ -143,14 +149,28 @@ export const ResultDisplay: React.FC<ResultDisplayProps> = ({
                       <p className="text-xs text-muted-foreground">For secure storage/transfer</p>
                     </div>
                   </div>
-                  <Button
-                    variant="secure"
-                    size="sm"
-                    onClick={() => handleDownload(result.files!.encrypted_bin!, 'encrypted_data.bin')}
-                  >
-                    <Download className="h-4 w-4" />
-                    Download
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    {/* Decrypt Button - only show for encrypted results with session_id and password */}
+                    {result.operation === 'encrypt' && result.session_id && currentPassword && onDecrypt && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => onDecrypt(result.session_id!, result.files!.encrypted_bin!)}
+                        className="text-accent hover:text-accent-foreground"
+                      >
+                        <Unlock className="h-4 w-4" />
+                        Decrypt & Analyze
+                      </Button>
+                    )}
+                    <Button
+                      variant="secure"
+                      size="sm"
+                      onClick={() => handleDownload(result.files!.encrypted_bin!, 'encrypted_data.bin')}
+                    >
+                      <Download className="h-4 w-4" />
+                      Download
+                    </Button>
+                  </div>
                 </div>
               )}
 
@@ -159,7 +179,7 @@ export const ResultDisplay: React.FC<ResultDisplayProps> = ({
                 <div className="space-y-2">
                   <div className="relative group rounded-lg overflow-hidden border border-border/50">
                     <img
-                      src={`${import.meta.env.VITE_SERVER_URL}${result.files.visualization}`}
+                      src={`${baseUrl}${result.files.visualization}`}
                       alt="Encrypted data visualization"
                       className="w-full h-32 object-cover"
                     />
@@ -200,7 +220,7 @@ export const ResultDisplay: React.FC<ResultDisplayProps> = ({
                 <div className="space-y-2">
                   <div className="relative group rounded-lg overflow-hidden border border-border/50">
                     <img
-                      src={`${import.meta.env.VITE_SERVER_URL}${result.files.decrypted_image}`}
+                      src={`${baseUrl}${result.files.decrypted_image}`}
                       alt="Decrypted image"
                       className="w-full h-48 object-cover"
                     />

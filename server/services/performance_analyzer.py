@@ -334,7 +334,7 @@ class PerformanceAnalyzer:
     
     def _resize_to_match(self, image: np.ndarray, target_shape: Tuple) -> np.ndarray:
         """
-        Resize image to match target shape for comparison.
+        Resize image to match target shape for comparison by cropping or padding.
         
         Args:
             image: Image to resize
@@ -346,26 +346,76 @@ class PerformanceAnalyzer:
         if image.shape == target_shape:
             return image
         
+        # Handle channel conversion first
         if len(target_shape) == 2:
             # Target is grayscale
-            h, w = target_shape
-            if len(image.shape) == 2:
-                # Source is also grayscale
-                return np.resize(image, (h, w))
-            else:
-                # Convert color to grayscale and resize
-                gray = np.mean(image, axis=2).astype(np.uint8)
-                return np.resize(gray, (h, w))
-        else:
+            if len(image.shape) == 3:
+                # Convert color to grayscale
+                image = np.mean(image, axis=2).astype(np.uint8)
+        elif len(target_shape) == 3:
             # Target is color
-            h, w, c = target_shape
             if len(image.shape) == 2:
-                # Convert grayscale to RGB
-                resized = np.stack([image] * 3, axis=2)
-                return np.resize(resized, (h, w, c))
+                # Convert grayscale to RGB by stacking
+                image = np.stack([image] * target_shape[2], axis=2)
+            elif image.shape[2] != target_shape[2]:
+                # Handle channel mismatch (e.g., RGBA to RGB)
+                if target_shape[2] == 3 and image.shape[2] > 3:
+                    # Take first 3 channels
+                    image = image[:, :, :3]
+                elif target_shape[2] > image.shape[2]:
+                    # Pad channels by repeating the last channel
+                    channels_needed = target_shape[2] - image.shape[2]
+                    last_channel = image[:, :, -1:] if image.shape[2] > 0 else np.zeros((image.shape[0], image.shape[1], 1), dtype=image.dtype)
+                    padding = np.repeat(last_channel, channels_needed, axis=2)
+                    image = np.concatenate([image, padding], axis=2)
+        
+        # Now handle spatial dimensions
+        if len(target_shape) == 2:
+            target_h, target_w = target_shape
+            current_h, current_w = image.shape[:2]
+        else:
+            target_h, target_w = target_shape[:2]
+            current_h, current_w = image.shape[:2]
+        
+        # Crop or pad to match dimensions
+        # First handle height
+        if current_h > target_h:
+            # Crop height (center crop)
+            start_h = (current_h - target_h) // 2
+            if len(image.shape) == 2:
+                image = image[start_h:start_h + target_h, :]
             else:
-                # Both are color
-                return np.resize(image, (h, w, c))
+                image = image[start_h:start_h + target_h, :, :]
+        elif current_h < target_h:
+            # Pad height
+            pad_h = target_h - current_h
+            pad_top = pad_h // 2
+            pad_bottom = pad_h - pad_top
+            if len(image.shape) == 2:
+                image = np.pad(image, ((pad_top, pad_bottom), (0, 0)), mode='constant', constant_values=0)
+            else:
+                image = np.pad(image, ((pad_top, pad_bottom), (0, 0), (0, 0)), mode='constant', constant_values=0)
+        
+        # Then handle width
+        current_h, current_w = image.shape[:2]
+        if current_w > target_w:
+            # Crop width (center crop)
+            start_w = (current_w - target_w) // 2
+            if len(image.shape) == 2:
+                image = image[:, start_w:start_w + target_w]
+            else:
+                image = image[:, start_w:start_w + target_w, :]
+        elif current_w < target_w:
+            # Pad width
+            pad_w = target_w - current_w
+            pad_left = pad_w // 2
+            pad_right = pad_w - pad_left
+            if len(image.shape) == 2:
+                image = np.pad(image, ((0, 0), (pad_left, pad_right)), mode='constant', constant_values=0)
+            else:
+                image = np.pad(image, ((0, 0), (pad_left, pad_right), (0, 0)), mode='constant', constant_values=0)
+        
+        return image
     
     def reset_timing(self):
         """Reset all timing data."""
@@ -446,30 +496,3 @@ def calculate_uaci(original: np.ndarray, encrypted: np.ndarray) -> float:
     return analyzer.calculate_uaci(original, encrypted)
 
 
-if __name__ == "__main__":
-    # Test the performance analyzer
-    print("🧪 Testing Performance Analyzer")
-    print("=" * 50)
-    
-    # Create test images
-    original = np.random.randint(0, 256, (128, 128, 3), dtype=np.uint8)
-    reconstructed = original + np.random.randint(-5, 6, original.shape, dtype=np.int8)
-    reconstructed = np.clip(reconstructed, 0, 255).astype(np.uint8)
-    encrypted_vis = np.random.randint(0, 256, original.shape, dtype=np.uint8)
-    
-    analyzer = PerformanceAnalyzer()
-    
-    # Test individual metrics
-    psnr = analyzer.calculate_psnr(original, reconstructed)
-    npcr = analyzer.calculate_npcr(original, encrypted_vis)
-    uaci = analyzer.calculate_uaci(original, encrypted_vis)
-    
-    print(f"PSNR: {psnr:.2f} dB")
-    print(f"NPCR: {npcr:.2f}%")
-    print(f"UACI: {uaci:.2f}%")
-    
-    # Test histogram analysis
-    hist_analysis = analyzer.analyze_histogram(original)
-    print(f"Histogram entropy: {hist_analysis['channels']['red']['entropy']:.2f}")
-    
-    print("\n✅ Performance Analyzer test completed!")

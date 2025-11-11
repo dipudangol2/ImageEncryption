@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ImageUpload } from '@/components/ImageUpload';
 import { EncryptionForm } from '@/components/EncryptionForm';
 import { ResultDisplay } from '@/components/ResultDisplay';
@@ -9,6 +10,7 @@ import { useToast } from '@/hooks/use-toast';
 
 interface ProcessResult {
   success: boolean;
+  session_id?: string;
   files?: {
     encrypted_bin?: string;
     visualization?: string;
@@ -50,7 +52,10 @@ const Index = () => {
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [result, setResult] = useState<ProcessResult | null>(null);
+  const [currentPassword, setCurrentPassword] = useState<string>('');
   const { toast } = useToast();
+  const navigate = useNavigate();
+  const baseUrl: string = import.meta.env.VITE_SERVER_URL ?? "";
 
   const handleImageSelect = (file: File) => {
     setSelectedImage(file);
@@ -63,6 +68,7 @@ const Index = () => {
   };
 
   const handleEncryption = async (password: string, operation: 'encrypt' | 'decrypt') => {
+    setCurrentPassword(password); // Store password for decrypt functionality
     if (!selectedImage) {
       toast({
         title: "Error",
@@ -107,7 +113,7 @@ const Index = () => {
 
       // Call appropriate endpoint
       const endpoint = operation === 'encrypt' ? '/api/encrypt' : '/api/decrypt';
-      const response = await fetch(`${import.meta.env.VITE_SERVER_URL}${endpoint}`, {
+      const response = await fetch(`${baseUrl}${endpoint}`, {
         method: 'POST',
         body: formData,
       });
@@ -122,6 +128,7 @@ const Index = () => {
       if (data.success) {
         setResult({
           success: true,
+          session_id: data.session_id,
           files: data.files,
           stats: data.stats,
           message: `${operation === 'encrypt' ? 'Encryption' : 'Decryption'} completed successfully!`,
@@ -169,6 +176,79 @@ const Index = () => {
     });
   };
 
+  const handleDecryptAndAnalyze = async (sessionId: string, encryptedFile: string) => {
+    if (!currentPassword) {
+      toast({
+        title: "Error",
+        description: "Password is required for decryption",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+
+      // Download the encrypted .bin file
+      const filename = encryptedFile.split('/').pop();
+      const downloadResponse = await fetch(`${baseUrl}/api/download/${filename}`);
+      
+      if (!downloadResponse.ok) {
+        throw new Error('Failed to fetch encrypted file');
+      }
+
+      const blob = await downloadResponse.blob();
+      const encryptedFileObj = new File([blob], filename || 'encrypted.bin', { type: 'application/octet-stream' });
+
+      // Call comprehensive analysis endpoint with FormData
+      const analysisFormData = new FormData();
+      analysisFormData.append('encrypted_file', encryptedFileObj);
+      analysisFormData.append('key', currentPassword);
+      analysisFormData.append('original_session_id', sessionId);
+
+      const analysisResponse = await fetch(`${baseUrl}/api/comprehensive-analysis`, {
+        method: 'POST',
+        body: analysisFormData,
+      });
+
+      if (analysisResponse.ok) {
+        const analysisData = await analysisResponse.json();
+        
+        // Navigate to results page with comprehensive data
+        navigate('/results', {
+          state: {
+            results: {
+              files: analysisData.files,
+              comprehensive_analysis: analysisData.comprehensive_analysis,
+              session_ids: analysisData.session_ids
+            }
+          }
+        });
+
+        toast({
+          title: "Success",
+          description: "Comprehensive analysis complete! Redirecting...",
+        });
+      } else {
+        const errorData = await analysisResponse.json();
+        throw new Error(errorData.detail || 'Analysis failed');
+      }
+
+    } catch (error) {
+      console.error('Decrypt and analyze error:', error);
+      
+      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+      
+      toast({
+        title: "Error",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -194,7 +274,7 @@ const Index = () => {
       <div className="container mx-auto px-4 py-8">
         <div className="max-w-6xl mx-auto space-y-8">
 
-        
+
 
           {/* Main Grid */}
           <div className="grid lg:grid-cols-2 gap-8">
@@ -222,6 +302,8 @@ const Index = () => {
                   result={result}
                   onDownload={handleDownload}
                   onReset={handleReset}
+                  onDecrypt={handleDecryptAndAnalyze}
+                  currentPassword={currentPassword}
                 />
               ) : (
                 <Card className="p-8 bg-gradient-secondary border-border/50">
