@@ -5,11 +5,9 @@ File management system with security and cleanup features.
 import os
 import time
 import threading
-import mimetypes
 from pathlib import Path
 from typing import Set, Optional
 import uuid
-import hashlib
 
 
 class FileManager:

@@ -213,16 +213,10 @@ const Index = () => {
 
       if (analysisResponse.ok) {
         const analysisData = await analysisResponse.json();
-        
-        // Navigate to results page with comprehensive data
+
+        // Navigate to results page with full data
         navigate('/results', {
-          state: {
-            results: {
-              files: analysisData.files,
-              comprehensive_analysis: analysisData.comprehensive_analysis,
-              session_ids: analysisData.session_ids
-            }
-          }
+          state: analysisData
         });
 
         toast({

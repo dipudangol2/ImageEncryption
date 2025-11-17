@@ -96,7 +96,7 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
                   Drag and drop your image or .bin file here
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  Supports JPG, PNG, JPEG, and .bin files
+                  Supports JPG, PNG, and .bin files
                 </p>
               </div>
               <Button

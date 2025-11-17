@@ -120,7 +120,7 @@ class DCTCompressor:
 
     def _compress_channel(
         self, channel: np.ndarray, quality: int, is_luminance: bool = True
-    ) -> Tuple[np.ndarray, bytes]:
+    ) -> bytes:
         """Compress a single channel using DCT + quantization."""
         # Pad channel and shift to [-128, 127]
         padded_channel, original_shape = self._pad_image(channel)
@@ -181,15 +181,9 @@ class DCTCompressor:
 
         coeffs_bytes = bytes(coeffs_data)
 
-        # Reconstruct for preview using compressed data
-        reconstructed = self._reconstruct_from_compressed_blocks(
-            compressed_blocks, (h, w), quant_matrix
-        )
-
-        # Remove padding
-        reconstructed = reconstructed[: original_shape[0], : original_shape[1]]
-
-        return reconstructed.astype(np.uint8), coeffs_bytes
+        # No need to reconstruct here - reconstruction happens during decompression
+        # This saves significant processing time (eliminates duplicate work)
+        return coeffs_bytes
 
     def _reconstruct_from_compressed_blocks(
         self,
@@ -239,7 +233,7 @@ class DCTCompressor:
         start_time = time.time()
         quality = max(1, min(100, quality))
         if len(image.shape) == 2:
-            reconstructed, coeffs_bytes = self._compress_channel(image, quality, True)
+            coeffs_bytes = self._compress_channel(image, quality, True)
             compressed_data = {
                 "quantized_coefficients": coeffs_bytes,
                 "quantization_matrix": self._get_quantization_matrix(
@@ -254,14 +248,12 @@ class DCTCompressor:
             }
         else:
             h, w, c = image.shape
-            reconstructed_channels = []
             all_coeffs_bytes = []
             for ch in range(c):
                 channel = image[:, :, ch]
-                reconstructed_ch, coeffs_bytes = self._compress_channel(
+                coeffs_bytes = self._compress_channel(
                     channel, quality, True
                 )
-                reconstructed_channels.append(reconstructed_ch)
                 all_coeffs_bytes.append(coeffs_bytes)
             compressed_data = {
                 "quantized_coefficients": all_coeffs_bytes,
@@ -360,9 +352,12 @@ class DCTCompressor:
         return reconstructed.astype(np.uint8)
 
     def get_compression_stats(
-        self, original_image: np.ndarray, compressed_data: Dict
+        self, original_image: np.ndarray, compressed_data: Dict, original_file_size: int = None
     ) -> Dict:
-        # Original image size in bytes
+        # IMPORTANT: Always use uncompressed array size for fair comparison
+        # Our DCT compression doesn't include entropy coding (Huffman/Arithmetic)
+        # So we must compare against RAW pixel data, not pre-compressed JPEG/PNG files
+        # original_file_size parameter kept for API compatibility but not used
         original_size_bytes = original_image.nbytes
 
         # Calculate actual compressed data size (only coefficients + metadata)

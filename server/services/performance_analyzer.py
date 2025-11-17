@@ -68,20 +68,7 @@ class PerformanceAnalyzer:
         return 20 * np.log10(255.0 / np.sqrt(mse))
     
     def calculate_npcr(self, original: np.ndarray, encrypted_visualization: np.ndarray) -> float:
-        """
-        Calculate Number of Pixels Change Rate (NPCR).
-        
-        NPCR measures the percentage of different pixels between two images.
-        Higher NPCR indicates better encryption (more pixels changed).
-        Ideal NPCR for good encryption should be close to 99.6%.
-        
-        Args:
-            original: Original image
-            encrypted_visualization: Encrypted image visualization
-            
-        Returns:
-            NPCR percentage (0-100)
-        """
+       
         # Ensure images have same dimensions for comparison
         encrypted_resized = self._resize_to_match(encrypted_visualization, original.shape)
         
@@ -222,18 +209,23 @@ class PerformanceAnalyzer:
         
         return results
     
-    def analyze_compression_efficiency(self, original_image: np.ndarray, 
-                                     compressed_data: Dict) -> Dict:
+    def analyze_compression_efficiency(self, original_image: np.ndarray,
+                                     compressed_data: Dict, original_file_size: int = None) -> Dict:
         """
         Analyze compression efficiency metrics.
-        
+
         Args:
             original_image: Original image array
             compressed_data: Compressed data dictionary
-            
+            original_file_size: Optional original file size in bytes (NOT USED - for API compatibility)
+
         Returns:
             Dictionary with compression efficiency metrics
         """
+        # IMPORTANT: Always use uncompressed array size for fair comparison
+        # Our DCT compression doesn't include entropy coding (Huffman/Arithmetic)
+        # So we compare raw quantized coefficients vs uncompressed pixel data
+        # NOT against already-compressed JPEG files
         original_size = original_image.nbytes
         
         # Calculate compressed size
@@ -253,18 +245,21 @@ class PerformanceAnalyzer:
         
         compression_ratio = original_size / compressed_size if compressed_size > 0 else 1.0
         space_saved_percent = (1 - compressed_size / original_size) * 100 if original_size > 0 else 0
-        
+
         # Calculate bits per pixel
         total_pixels = original_image.shape[0] * original_image.shape[1]
         bpp = (compressed_size * 8) / total_pixels
-        
+
+        # Compression efficiency is simply the space saved percentage
+        compression_efficiency = space_saved_percent
+
         return {
             'original_size_bytes': original_size,
             'compressed_size_bytes': compressed_size,
             'compression_ratio': compression_ratio,
             'space_saved_percent': space_saved_percent,
             'bits_per_pixel': bpp,
-            'compression_efficiency': compression_ratio / (compressed_data.get('quality', 75) / 100.0)
+            'compression_efficiency': compression_efficiency
         }
     
     def get_timing_report(self) -> Dict:

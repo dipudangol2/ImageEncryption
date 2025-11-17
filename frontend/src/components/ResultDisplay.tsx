@@ -153,10 +153,10 @@ export const ResultDisplay: React.FC<ResultDisplayProps> = ({
                     {/* Decrypt Button - only show for encrypted results with session_id and password */}
                     {result.operation === 'encrypt' && result.session_id && currentPassword && onDecrypt && (
                       <Button
-                        variant="outline"
+                        variant="secure"
                         size="sm"
                         onClick={() => onDecrypt(result.session_id!, result.files!.encrypted_bin!)}
-                        className="text-accent hover:text-accent-foreground"
+
                       >
                         <Unlock className="h-4 w-4" />
                         Decrypt & Analyze

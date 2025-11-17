@@ -8,13 +8,10 @@ import os
 import time
 import hashlib
 import uuid
+import shutil
+import traceback
 from pathlib import Path
 from typing import Optional, Dict, Any
-
-
-
-# Add parent directory to path to import our modules
-# sys.path.append(str(Path(__file__).parent.parent))
 
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
@@ -59,6 +56,10 @@ app.mount("/files", StaticFiles(directory=OUTPUT_DIR), name="files")
 compressor = DCTCompressor()
 file_manager = FileManager(UPLOAD_DIR, OUTPUT_DIR)
 performance_analyzer = PerformanceAnalyzer()
+
+# In-memory cache for session stats (encryption timing data)
+# Maps session_id -> stats dict
+session_stats_cache: Dict[str, Dict[str, Any]] = {}
 
 
 def derive_aes_key(password: str) -> bytes:
@@ -106,9 +107,13 @@ def save_image_from_array(
     """Save numpy array as image file with specified format."""
     img = Image.fromarray(np.clip(array, 0, 255).astype(np.uint8))
 
-    # Set quality for JPEG format to avoid maximum quality
+    # Set quality for JPEG format to match typical compression
+    # Using 85 as a good balance between quality and file size
     if format_ext.lower() in [".jpg", ".jpeg"]:
-        img.save(path, quality=95, optimize=True)
+        img.save(path, quality=85, optimize=True)
+    elif format_ext.lower() == ".png":
+        # PNG is lossless, use optimization
+        img.save(path, optimize=True)
     else:
         img.save(path)
 
@@ -194,7 +199,7 @@ async def encrypt_image(
 
         # Read and validate file
         file_content = await image.read()
-        original_file_size = image.size  # Get original file size in bytes
+        original_file_size = len(file_content)  # Get original file size in bytes from actual content
 
         is_valid, error_msg = file_manager.validate_file(
             file_content, image.filename or "unknown", image.content_type
@@ -210,7 +215,7 @@ async def encrypt_image(
 
         # Extract original file format for preservation
         original_format = Path(image.filename or "image.png").suffix.lower()
-        if original_format not in [".jpg", ".jpeg", ".png"]:
+        if original_format not in [".jpg", ".jpeg", ".png", ".bmp"]:
             original_format = ".png"  # Default to PNG for unsupported formats
 
         # Load and process image
@@ -237,13 +242,13 @@ async def encrypt_image(
 
         # Set quality based on file format
         if original_format.lower() in [".jpg", ".jpeg"]:
-            # JPG files get lower quality for better compression
-            compression_quality = 30
+            # JPG files already compressed - use moderate quality for good balance
+            compression_quality = 50
         elif original_format.lower() == ".png":
             # PNG files get higher quality
             compression_quality = 60
         else:
-            # Other formats (including AVIF) use default quality
+            # Other formats use default quality
             compression_quality = quality
 
         # Compress image with timing
@@ -295,6 +300,7 @@ async def encrypt_image(
         )
 
         # Get basic compression statistics
+        # NOTE: This compares RAW pixel data vs DCT coefficients (not file-to-file)
         basic_stats = compressor.get_compression_stats(img_np, compressed_data)
 
         # Serialize numpy types for JSON response
@@ -450,6 +456,15 @@ async def encrypt_image(
             "detailed_metrics": performance_report_serialized,
         }
 
+        # Store encryption timing stats in cache for later retrieval during comprehensive analysis
+        session_stats_cache[session_id] = {
+            "compression_time": round(float(timing_data["operations"].get("compression", 0)), 3),
+            "encryption_time": round(float(timing_data["operations"].get("encryption", 0)), 3),
+            "decompression_time": round(float(timing_data["operations"].get("decompression", 0)), 3),
+            "visualization_time": round(float(timing_data["operations"].get("visualization", 0)), 3),
+            "total_encryption_time": round(float(total_time), 3)
+        }
+
         # Files will be automatically cleaned up by the background thread after 30 minutes
 
         return {
@@ -539,8 +554,7 @@ async def decrypt_image(
         with performance_analyzer.time_operation("decompression"):
             reconstructed_img = compressor.decompress(compressed_data)
 
-        # Extract original format from metadata (with fallback to PNG)
-        # original_format = ".jpg"
+        # Extract original format from metadata (with fallback to JPG)
         original_format = compressed_data.get("original_format", ".jpg")
 
         # Save reconstructed image with original format
@@ -791,10 +805,20 @@ async def comprehensive_analysis(
                 original_histogram = performance_analyzer.analyze_histogram(original_img)
                 encrypted_histogram = performance_analyzer.analyze_histogram(encrypted_visualization)
                 decrypted_histogram = performance_analyzer.analyze_histogram(reconstructed_img)
-                
+
+                # Get original file size for file size comparison display
+                try:
+                    original_file_size = original_upload_path.stat().st_size
+                except Exception as e:
+                    print(f"Warning: Could not get original file size: {str(e)}")
+                    original_file_size = 0
+
                 # Compression efficiency
+                # NOTE: This measures DCT compression of RAW pixel data (not file-to-file compression)
+                # Our implementation lacks entropy coding (Huffman/Arithmetic) that real JPEG uses
+                # So we compare: uncompressed pixel array → quantized DCT coefficients
                 compression_metrics = performance_analyzer.analyze_compression_efficiency(original_img, compressed_data)
-                
+
                 # Build comprehensive performance report manually
                 performance_report = {
                     'quality_metrics': {
@@ -822,7 +846,6 @@ async def comprehensive_analysis(
                 
             except Exception as e:
                 print(f"Analysis error: {str(e)}")
-                import traceback
                 traceback.print_exc()
                 # More detailed error logging
                 print(f"Original image shape: {original_img.shape if 'original_img' in locals() else 'Not loaded'}")
@@ -840,8 +863,7 @@ async def comprehensive_analysis(
         output_path = file_manager.get_output_path(output_filename)
         save_image_from_array(reconstructed_img, str(output_path), original_format)
 
-        # Get file sizes for comparison
-        original_file_size = original_upload_path.stat().st_size
+        # Get decrypted file size for comparison (original_file_size already retrieved above)
         decrypted_file_size = output_path.stat().st_size
         
         # Serialize data for JSON response
@@ -857,7 +879,6 @@ async def comprehensive_analysis(
         
         # Copy original file to output directory if it doesn't exist there
         if not original_output_path.exists():
-            import shutil
             shutil.copy2(original_upload_path, original_output_path)
             file_manager.file_tracker[str(original_output_path)] = time.time()
         
@@ -895,7 +916,12 @@ async def comprehensive_analysis(
                 "total_time": round(float(total_time), 3),
                 "decryption_time": round(float(timing_data["operations"].get("decryption", 0)), 3),
                 "decompression_time": round(float(timing_data["operations"].get("decompression", 0)), 3),
-                "analysis_time": round(float(timing_data["operations"].get("analysis", 0)), 3)
+                "analysis_time": round(float(timing_data["operations"].get("analysis", 0)), 3),
+                # Include encryption phase timings from cached session stats
+                "compression_time": session_stats_cache.get(original_session_id, {}).get("compression_time", 0),
+                "encryption_time": session_stats_cache.get(original_session_id, {}).get("encryption_time", 0),
+                "visualization_time": session_stats_cache.get(original_session_id, {}).get("visualization_time", 0),
+                "total_encryption_time": session_stats_cache.get(original_session_id, {}).get("total_encryption_time", 0)
             },
             "compression_analysis": performance_report_serialized["compression_metrics"],
             "file_size_comparison": {
@@ -912,7 +938,8 @@ async def comprehensive_analysis(
             }
         }
         
-        return {
+        # Prepare response data
+        response_data = {
             "success": True,
             "session_ids": {
                 "original": original_session_id,
@@ -930,7 +957,10 @@ async def comprehensive_analysis(
                 "summary": performance_report_serialized["summary"]
             }
         }
-        
+
+        # Return full analysis data directly
+        return response_data
+
     except HTTPException:
         raise
     except Exception as e:
