@@ -41,9 +41,13 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 # Switch to the non-privileged user to run the application.
 USER appuser
 
-# Copy the source code into the container.
-COPY . .
+# Copy the source code into the container with the permissions
+# COPY . .
+COPY --chown=appuser:appuser . .
 
+# Ensure upload folders exist WITH correct permissions
+RUN mkdir -p api/uploads api/outputs && \
+    chown -R appuser:appuser api/uploads api/outputs
 # Expose the port that the application listens on.
 EXPOSE 8000
 
